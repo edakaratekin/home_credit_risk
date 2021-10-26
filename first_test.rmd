@@ -29,6 +29,16 @@ data(head(application_train))
 str(application_train)
 ```
 ```{r}
+## change all character variables to factors. since they are in fact factors. 
+for (c in colnames(application_train)){
+       if(class(application_train[[c]])=='character'  ) {
+          application_train[[c]] = as.factor(application_train[[c]])
+    }
+}
+```
+
+
+```{r}
 application_train[ , grepl( "FLAG" , names( application_train ) ) ] = lapply(application_train[ , grepl( "FLAG" , names( application_train ) ) ],factor)
 application_train[ , grepl( "FLAG" , names( application_train ) ) ]
 application_train[ ,'TARGET'] = as.factor(application_train[ ,'TARGET'])
@@ -45,22 +55,28 @@ summary(application_train)
 skimr::skim(application_train)
 ```
 
-Let's start graphs. First We will use the name df for simplyfying the code. 
+Let's start graphs. First We will use the name df for simplifying the code. 
 
 ```{r}
 df = application_train
 ```
 
+```{r}
+for (c in colnames(df)){
+       if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
+           df_uniq = unique(df[[c]])
+           print(c,str(length(df_uniq)))
+    }
+}
+```
 
 Boxplots for outliers: 
 
 ```{r}
-cols <- sapply(df, class) == "numeric"
-summary(cols)
 
 for (c in colnames(df)){
-       if(class(df[[c]])=='numeric') {
-        boxplot(df[[c]] ~ TARGET, data = df, col = "red")   
+       if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
+        boxplot(df[[c]] ~ TARGET, data = df, col = "red",ylab = c)   
     }
 }
 ```
@@ -69,9 +85,26 @@ for (c in colnames(df)){
 Histograms:
 
 ```{r}
-gg <- melt(df)
-
-ggplot(df,aes(x=AMT_INCOME_TOTAL,group=TARGET,fill=TARGET))+
+library(hrbrthemes)
+##to try 
+ggplot(df,aes(x=DAYS_LAST_PHONE_CHANGE,binwidth=.1, group=TARGET,fill=TARGET))+
   geom_histogram(position="dodge")+theme_bw()
+
+
+for (c in colnames(df)){
+  if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
+    df_uniq = unique(df[[c]])
+    if(length(df_uniq) > 30 ) {
+      c
+      binw = (max(df[[c]], na.rm=T) - min(df[[c]], na.rm=T)) / sqrt(307512)
+      binw
+         ggplot(df, aes(x=df[[c]], fill=TARGET)) +
+        geom_histogram( color="#e9ecef", alpha=0.6, position = 'identity') +
+       scale_fill_manual(values=c("#69b3a2", "#404080")) +
+        theme_bw() +
+        labs(fill="")
+    }
+  }
+}
 ```
 
