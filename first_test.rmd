@@ -1,0 +1,77 @@
+---
+title: "Hme Credit Risk Graphs"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+```{r}
+library(ggplot2)
+library(data.table)
+library(psych)
+library(skimr)
+library(reshape2)
+getwd()
+```
+
+
+```{r}
+application_train = read.csv("C:/Users/Eda/Documents/courses/CSIS_3360/Project/home_credit_risk_project/data/application_train.csv")
+```
+
+
+```{r}
+data(head(application_train))
+str(application_train)
+```
+```{r}
+application_train[ , grepl( "FLAG" , names( application_train ) ) ] = lapply(application_train[ , grepl( "FLAG" , names( application_train ) ) ],factor)
+application_train[ , grepl( "FLAG" , names( application_train ) ) ]
+application_train[ ,'TARGET'] = as.factor(application_train[ ,'TARGET'])
+
+```
+
+Above , we changed FLAG columns as categorical variables since they are not really numerical but True/False columns.Also Target column is categorical dependent variable, hence we change it to factor.
+
+```{r}
+summary(application_train)
+```
+
+```{r}
+skimr::skim(application_train)
+```
+
+Let's start graphs. First We will use the name df for simplyfying the code. 
+
+```{r}
+df = application_train
+```
+
+
+Boxplots for outliers: 
+
+```{r}
+cols <- sapply(df, class) == "numeric"
+summary(cols)
+
+for (c in colnames(df)){
+       if(class(df[[c]])=='numeric') {
+        boxplot(df[[c]] ~ TARGET, data = df, col = "red")   
+    }
+}
+```
+
+
+Histograms:
+
+```{r}
+gg <- melt(df)
+
+ggplot(df,aes(x=AMT_INCOME_TOTAL,group=TARGET,fill=TARGET))+
+  geom_histogram(position="dodge")+theme_bw()
+```
+
