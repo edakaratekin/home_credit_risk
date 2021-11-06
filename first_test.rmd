@@ -50,25 +50,92 @@ Above , we changed FLAG columns as categorical variables since they are not real
 ```{r}
 summary(application_train)
 ```
+We also will determine and convert  the factor variables which are recognized as numeric by R. 
+
+```{r}
+for (c in colnames(application_train)){
+       if(class(application_train[[c]])=='numeric' | class(application_train[[c]])=='integer'  ) {
+           df_uniq = unique(application_train[[c]])
+           print(c,str(length(df_uniq)))
+           if(length(df_uniq) <= 30){
+             application_train[[c]] = as.factor(application_train[[c]])
+           }
+    }
+}
+```
+
+Let's look at the data again:
+
 
 ```{r}
 skimr::skim(application_train)
 ```
 
-Let's start graphs. First We will use the name df for simplifying the code. 
+Some columns have so many null values and some columns have the same information for almost all data. So these columns have no informational value at all.  We determined about 40 columns like that, we dicede to omit them. We will delete ID also
 
 ```{r}
-df = application_train
+### Drop for the columns
+
+drop <- c("SK_ID_CURR",
+          "FLAG_CONT_MOBILE",
+          "FLAG_DOCUMENT_10",
+          "FLAG_DOCUMENT_11",
+          "FLAG_DOCUMENT_12",
+          "FLAG_DOCUMENT_13",
+          "FLAG_DOCUMENT_14",
+          "FLAG_DOCUMENT_15",
+          "FLAG_DOCUMENT_16",
+          "FLAG_DOCUMENT_17",
+          "FLAG_DOCUMENT_18",
+          "FLAG_DOCUMENT_19",
+          "FLAG_DOCUMENT_2",
+          "FLAG_DOCUMENT_20",
+          "FLAG_DOCUMENT_21",
+          "FLAG_DOCUMENT_4",
+          "FLAG_DOCUMENT_5",
+          "FLAG_DOCUMENT_7",
+          "FLAG_DOCUMENT_9",
+          "FLAG_MOBIL",
+          "BASEMENTAREA_AVG",
+          "BASEMENTAREA_MEDI",
+          "BASEMENTAREA_MODE",
+          "COMMONAREA_AVG",
+          "COMMONAREA_MEDI",
+          "COMMONAREA_MODE",
+          "ELEVATORS_AVG",
+          "ELEVATORS_MEDI",
+          "ELEVATORS_MODE",
+          "EXT_SOURCE_1",
+          "FLOORSMIN_AVG",
+          "FLOORSMIN_MEDI",
+          "FLOORSMIN_MODE",
+          "LANDAREA_AVG",
+          "LANDAREA_MODE",
+          "LIVINGAPARTMENTS_AVG",
+          "LIVINGAPARTMENTS_MEDI",
+          "LIVINGAPARTMENTS_MODE",
+          "NONLIVINGAPARTMENTS_AVG",
+          "NONLIVINGAPARTMENTS_MEDI",
+          "NONLIVINGAPARTMENTS_MODE",
+          "NONLIVINGAREA_AVG",
+          "NONLIVINGAREA_MODE",
+          "OWN_CAR_AGE",
+          "YEARS_BUILD_AVG",
+          "YEARS_BUILD_MEDI",
+          "YEARS_BUILD_MODE")
+
+df = application_train[,!(names(application_train) %in% drop)]
+
 ```
 
+Let's look at eth data again:
+
 ```{r}
-for (c in colnames(df)){
-       if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
-           df_uniq = unique(df[[c]])
-           print(c,str(length(df_uniq)))
-    }
-}
+skimr::skim(df)
 ```
+
+Let's start graphs. We use the name df for simplifying the code. 
+
 
 Boxplots for outliers: 
 
@@ -85,25 +152,28 @@ for (c in colnames(df)){
 Histograms:
 
 ```{r}
-library(hrbrthemes)
+##library(hrbrthemes)
 ##to try 
-ggplot(df,aes(x=DAYS_LAST_PHONE_CHANGE,binwidth=.1, group=TARGET,fill=TARGET))+
-  geom_histogram(position="dodge")+theme_bw()
+##ggplot(df,aes(x=DAYS_LAST_PHONE_CHANGE,binwidth=.1, group=TARGET,fill=TARGET))+
+##  geom_histogram(position="dodge")+theme_bw()
 
 
 for (c in colnames(df)){
   if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
     df_uniq = unique(df[[c]])
-    if(length(df_uniq) > 30 ) {
-      c
+    ##if(length(df_uniq) > 30 ) {
+      print(c)
       binw = (max(df[[c]], na.rm=T) - min(df[[c]], na.rm=T)) / sqrt(307512)
-      binw
-         ggplot(df, aes(x=df[[c]], fill=TARGET)) +
+      print(binw)
+        (ggplot(df, aes(x=df[[c]], fill=TARGET)) +
         geom_histogram( color="#e9ecef", alpha=0.6, position = 'identity') +
-       scale_fill_manual(values=c("#69b3a2", "#404080")) +
-        theme_bw() +
-        labs(fill="")
-    }
+            scale_fill_manual(values=c("#69b3a2", "#404080")) +
+            theme_bw() +
+            xlab(c)+
+            labs(fill=""))  %>% print()
+        
+        
+    ##}
   }
 }
 ```
