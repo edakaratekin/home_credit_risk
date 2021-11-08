@@ -20,7 +20,7 @@ getwd()
 
 
 ```{r}
-application_train = read.csv("C:/Users/Eda/Documents/courses/CSIS_3360/Project/home_credit_risk_project/data/application_train.csv")
+application_train = read.csv("./data/application_train.csv")
 ```
 
 
@@ -122,11 +122,64 @@ drop <- c("SK_ID_CURR",
           "OWN_CAR_AGE",
           "YEARS_BUILD_AVG",
           "YEARS_BUILD_MEDI",
-          "YEARS_BUILD_MODE")
+          "YEARS_BUILD_MODE",
+          "APARTMENTS_AVG",
+          "YEARS_BEGINEXPLUATATION_AVG", 
+          "ENTRANCES_AVG", 
+          "FLOORSMAX_AVG", 
+          "LIVINGAREA_AVG",
+          "APARTMENTS_MODE", 
+          "YEARS_BEGINEXPLUATATION_MODE",
+          "ENTRANCES_MODE", 
+          "LIVINGAREA_MODE",
+          "APARTMENTS_MEDI",
+          "YEARS_BEGINEXPLUATATION_MEDI", 
+          "ENTRANCES_MEDI",              
+          "FLOORSMAX_MEDI",              
+          "LANDAREA_MEDI",               
+          "LIVINGAREA_MEDI",             
+          "NONLIVINGAREA_MEDI",          
+          "TOTALAREA_MODE",
+          "FLOORSMAX_MODE",
+          "EXT_SOURCE_3")
 
 df = application_train[,!(names(application_train) %in% drop)]
 
 ```
+
+```{r}
+### Fill And Drop Null values
+
+#Factor columns' Null values Fill with the column mean
+
+HasNullFactor <- c("CNT_FAM_MEMBERS",
+                    "DEF_30_CNT_SOCIAL_CIRCLE",
+                    "DEF_60_CNT_SOCIAL_CIRCLE",
+                    "AMT_REQ_CREDIT_BUREAU_HOUR",               
+                    "AMT_REQ_CREDIT_BUREAU_DAY",              
+                    "AMT_REQ_CREDIT_BUREAU_WEEK",             
+                    "AMT_REQ_CREDIT_BUREAU_MON",             
+                    "AMT_REQ_CREDIT_BUREAU_QRT",            
+                    "AMT_REQ_CREDIT_BUREAU_YEAR")
+
+for (columnName in HasNullFactor){
+    df[[columnName]][is.na(df[columnName])] <- round(mean(as.numeric(df[[columnName]]), na.rm = TRUE))
+}
+
+#Numeric columns' Null values Fill with the column mean
+HasNullNumeric <- c("EXT_SOURCE_2",
+                    "AMT_GOODS_PRICE",
+                    "AMT_ANNUITY")
+
+for (columnName in HasNullNumeric){
+  df[columnName][is.na(df[columnName])] <- colMeans(df[columnName], na.rm = TRUE)
+}
+
+#If there is any null other than these, they will be drop
+df <- na.omit(df)
+
+```
+
 
 Let's look at eth data again:
 
