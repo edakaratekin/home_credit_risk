@@ -1,7 +1,7 @@
 # Installing Packages
-install.packages("e1071")
-install.packages("caTools")
-install.packages("caret")
+##install.packages("e1071")
+##install.packages("caTools")
+##install.packages("caret")
 
 # Loading package
 library(e1071)
@@ -32,3 +32,6 @@ cm
 
 # Model Evaluation
 confusionMatrix(cm)
+recall(cm)
+precision(cm)
+F_meas(cm)
