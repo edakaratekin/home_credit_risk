@@ -1,7 +1,10 @@
 # Installing Packages
-install.packages("e1071")
-install.packages("caTools")
-install.packages("caret")
+##install.packages("e1071")
+##install.packages("caTools")
+##install.packages("caret")
+
+install.packages("klaR") 
+# this is for 10-fold cv naive bayes
 
 # Loading package
 library(e1071)
@@ -20,7 +23,7 @@ test_cl <- subset(df, split == "FALSE")
 
 # Fitting Naive Bayes Model to training dataset
 set.seed(120)  # Setting Seed
-classifier_cl <- naiveBayes(TARGET ~ ., data = train_cl)
+classifier_cl <- naiveBayes(TARGET ~ ., data = train_cl,laplace=1)
 classifier_cl
 
 # Predicting on test data'
@@ -32,3 +35,20 @@ cm
 
 # Model Evaluation
 confusionMatrix(cm)
+recall(cm)
+precision(cm)
+F_meas(cm)
+
+
+# naive bayes using 10-fold cross validation 
+# reference https://rpubs.com/maulikpatel/224581
+
+xTrain = train_cl[,-1] # removing y-outcome variable.
+yTrain = train_cl$TARGET # only y.
+
+xTest = test_cl[,-1]
+yTest = test_cl$TARGET
+
+model = train(xTrain,yTrain,'nb',trControl=trainControl(method='cv',number=10))
+
+prop.table(table(predict(model$finalModel,xTest)$class,yTest)) # table() gives frequency table, prop.table() gives freq% table.
