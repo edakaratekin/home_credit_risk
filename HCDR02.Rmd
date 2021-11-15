@@ -1,0 +1,165 @@
+---
+title: "HCDR02"
+author: "Gabrielle Saga"
+date: "13/11/2021"
+output: html_document
+---
+
+# 1. Data Importation
+```{r import libraries}
+packages <- c("dplyr", "ggplot2", "rpart", "caret", "randomForest", "ipred", "MASS", "survival", "neuralnet", "adabag", "xgboost", "e1071", "class", "rpart.plot", "vip", "pdp", "glmnet", "tidyverse")
+lapply(packages, require, character.only=TRUE)
+```
+
+```{r import data}
+df_train <- read.csv("application_train.csv")
+head(df_train)
+any(is.na(df_train))
+any(duplicated(df_train))
+# drop sk_id_curr
+df <- df_train[, -c(1)]
+head(df)
+# missing values
+table(is.na(df))
+nrow(df)
+```
+
+# 2. Data Manipulation
+```{r remove unnecessary columns}
+df <- subset(df, select=-c(FLAG_CONT_MOBILE, FLAG_DOCUMENT_10, FLAG_DOCUMENT_11, FLAG_DOCUMENT_12, FLAG_DOCUMENT_13, FLAG_DOCUMENT_14, FLAG_DOCUMENT_15, FLAG_DOCUMENT_16, FLAG_DOCUMENT_17, FLAG_DOCUMENT_18, FLAG_DOCUMENT_19, FLAG_DOCUMENT_2, FLAG_DOCUMENT_20, FLAG_DOCUMENT_21, FLAG_DOCUMENT_4, FLAG_DOCUMENT_5, FLAG_DOCUMENT_7, FLAG_DOCUMENT_9, FLAG_MOBIL, BASEMENTAREA_AVG, BASEMENTAREA_MEDI, BASEMENTAREA_MODE, COMMONAREA_AVG, COMMONAREA_MEDI, COMMONAREA_MODE, ELEVATORS_AVG, ELEVATORS_MEDI, ELEVATORS_MODE, EXT_SOURCE_1, FLOORSMIN_AVG, FLOORSMIN_MEDI, FLOORSMIN_MODE, LANDAREA_AVG, LANDAREA_MODE, LIVINGAPARTMENTS_AVG, LIVINGAPARTMENTS_MODE, NONLIVINGAPARTMENTS_AVG, NONLIVINGAPARTMENTS_MEDI, NONLIVINGAPARTMENTS_MODE, NONLIVINGAREA_AVG, NONLIVINGAREA_MODE, OWN_CAR_AGE, YEARS_BUILD_AVG, YEARS_BUILD_MEDI, YEARS_BUILD_MODE, APARTMENTS_AVG, YEARS_BEGINEXPLUATATION_AVG, ENTRANCES_AVG, FLOORSMAX_AVG, LIVINGAREA_AVG, APARTMENTS_MODE, YEARS_BEGINEXPLUATATION_AVG, ENTRANCES_AVG, FLOORSMAX_AVG, LIVINGAREA_AVG, APARTMENTS_MODE, YEARS_BEGINEXPLUATATION_MODE, ENTRANCES_MODE, LIVINGAREA_MODE, APARTMENTS_MEDI, YEARS_BEGINEXPLUATATION_MEDI, ENTRANCES_MEDI, FLOORSMAX_MEDI, LANDAREA_MEDI, LIVINGAREA_MEDI, LIVINGAREA_MEDI, NONLIVINGAREA_MEDI, TOTALAREA_MODE, FLOORSMAX_MODE, EXT_SOURCE_3))
+head(df)
+```
+
+```{r fill and drop null values}
+HasNullFactor <- c("CNT_FAM_MEMBERS", "DEF_30_CNT_SOCIAL_CIRCLE", "DEF_60_CNT_SOCIAL_CIRCLE", "AMT_REQ_CREDIT_BUREAU_HOUR", "AMT_REQ_CREDIT_BUREAU_DAY", "AMT_REQ_CREDIT_BUREAU_MON", "AMT_REQ_CREDIT_BUREAU_QRT", "AMT_REQ_CREDIT_BUREAU_YEAR")
+
+for (columnName in HasNullFactor){
+  df[[columnName]][is.na(df[columnName])] <- round(mean(as.numeric(df[[columnName]]), na.rm = TRUE))
+}
+
+HasNullNumeric <- c("EXT_SOURCE_2", "AMT_GOODS_PRICE", "AMT_ANNUITY")
+
+for (columnName in HasNullNumeric){
+  df[columnName][is.na(df[columnName])] <- colMeans(df[columnName], na.rm = TRUE)
+}
+
+df <- df %>% mutate(CODE_GENDER = na_if(CODE_GENDER, "XNA"),
+                    ORGANIZATION_TYPE = na_if(ORGANIZATION_TYPE, "XNA"))
+
+df <- na.omit(df)
+```
+
+```{r}
+#skimr::skim(df)
+head(df)
+```
+
+```{r separating categorical and continuous}
+# categorical
+catdf <- subset(df, select=c(NAME_CONTRACT_TYPE, CODE_GENDER, FLAG_OWN_CAR, FLAG_OWN_REALTY, NAME_TYPE_SUITE, NAME_INCOME_TYPE, NAME_EDUCATION_TYPE, NAME_FAMILY_STATUS, NAME_HOUSING_TYPE, OCCUPATION_TYPE, WEEKDAY_APPR_PROCESS_START, ORGANIZATION_TYPE, FONDKAPREMONT_MODE, HOUSETYPE_MODE, WALLSMATERIAL_MODE, EMERGENCYSTATE_MODE))
+head(catdf)
+
+# continuous
+condf <- subset(df, select=c(CNT_CHILDREN, AMT_INCOME_TOTAL, AMT_CREDIT, AMT_ANNUITY, AMT_GOODS_PRICE, REGION_POPULATION_RELATIVE, DAYS_BIRTH, DAYS_EMPLOYED, DAYS_REGISTRATION, DAYS_ID_PUBLISH, CNT_FAM_MEMBERS, REGION_RATING_CLIENT, REGION_RATING_CLIENT_W_CITY, HOUR_APPR_PROCESS_START, REG_REGION_NOT_LIVE_REGION, REG_REGION_NOT_WORK_REGION, LIVE_REGION_NOT_WORK_REGION, REG_CITY_NOT_LIVE_CITY, REG_CITY_NOT_WORK_CITY, LIVE_CITY_NOT_WORK_CITY, EXT_SOURCE_2, LIVINGAPARTMENTS_MEDI, OBS_30_CNT_SOCIAL_CIRCLE, DEF_30_CNT_SOCIAL_CIRCLE, OBS_60_CNT_SOCIAL_CIRCLE, DEF_60_CNT_SOCIAL_CIRCLE, DAYS_LAST_PHONE_CHANGE, AMT_REQ_CREDIT_BUREAU_HOUR, AMT_REQ_CREDIT_BUREAU_DAY, AMT_REQ_CREDIT_BUREAU_WEEK, AMT_REQ_CREDIT_BUREAU_MON, AMT_REQ_CREDIT_BUREAU_QRT, AMT_REQ_CREDIT_BUREAU_YEAR))
+head(condf)
+```
+
+```{r renaming columns}
+#categorical
+catdf <- catdf %>% rename(ContractType=NAME_CONTRACT_TYPE,
+                          Gender=CODE_GENDER,
+                          OwnCar=FLAG_OWN_CAR,
+                          OwnRealty=FLAG_OWN_REALTY,
+                          Suite=NAME_TYPE_SUITE,
+                          IncomeType=NAME_INCOME_TYPE,
+                          Education=NAME_EDUCATION_TYPE,
+                          FamStat=NAME_FAMILY_STATUS,
+                          Housing=NAME_HOUSING_TYPE,
+                          Occ=OCCUPATION_TYPE,
+                          ProcessStart=WEEKDAY_APPR_PROCESS_START,
+                          Org=ORGANIZATION_TYPE,
+                          Account=FONDKAPREMONT_MODE,
+                          HouseMode=HOUSETYPE_MODE,
+                          Material=WALLSMATERIAL_MODE,
+                          Emergency=EMERGENCYSTATE_MODE)
+
+#continuous
+condf <- condf %>% rename(Children=CNT_CHILDREN, 
+                          Income=AMT_INCOME_TOTAL, 
+                          Credit=AMT_CREDIT, 
+                          Annuity=AMT_ANNUITY, 
+                          GoodsPrice=AMT_GOODS_PRICE, 
+                          Population=REGION_POPULATION_RELATIVE, 
+                          BirthDays=DAYS_BIRTH, 
+                          EmployedDays=DAYS_EMPLOYED, 
+                          RegistrationDays=DAYS_REGISTRATION, 
+                          IdPubDays=DAYS_ID_PUBLISH, 
+                          FamMembers=CNT_FAM_MEMBERS, 
+                          RRC=REGION_RATING_CLIENT, 
+                          RRCC=REGION_RATING_CLIENT_W_CITY, 
+                          StartHourProcess=HOUR_APPR_PROCESS_START, 
+                          RRNLR=REG_REGION_NOT_LIVE_REGION, 
+                          RRNWR=REG_REGION_NOT_WORK_REGION, 
+                          LRNWR=LIVE_REGION_NOT_WORK_REGION, 
+                          RCNLC=REG_CITY_NOT_LIVE_CITY, 
+                          RCNWC=REG_CITY_NOT_WORK_CITY, 
+                          LCNWC=LIVE_CITY_NOT_WORK_CITY, 
+                          ExtSource2=EXT_SOURCE_2, 
+                          LivingApts=LIVINGAPARTMENTS_MEDI, 
+                          Social30oc=OBS_30_CNT_SOCIAL_CIRCLE, 
+                          Social30dc=DEF_30_CNT_SOCIAL_CIRCLE, 
+                          Social60oc=OBS_60_CNT_SOCIAL_CIRCLE, 
+                          Social60dc=DEF_60_CNT_SOCIAL_CIRCLE, 
+                          SLPC=DAYS_LAST_PHONE_CHANGE, 
+                          CBHour=AMT_REQ_CREDIT_BUREAU_HOUR, 
+                          CBDay=AMT_REQ_CREDIT_BUREAU_DAY, 
+                          CBWeek=AMT_REQ_CREDIT_BUREAU_WEEK, 
+                          CBMonth=AMT_REQ_CREDIT_BUREAU_MON, 
+                          CBQrt=AMT_REQ_CREDIT_BUREAU_QRT, 
+                          CBYear=AMT_REQ_CREDIT_BUREAU_YEAR)
+```
+
+```{r dummy variables}
+library('fastDummies')
+catdf2 <- fastDummies::dummy_cols(catdf, remove_first_dummy = TRUE)
+catdf2 <- catdf2[, -c(1:17)]
+catdf3 <- cbind(catdf2, df[c("TARGET", "FLAG_EMP_PHONE", "FLAG_WORK_PHONE", "FLAG_PHONE", "FLAG_EMAIL", "FLAG_DOCUMENT_3", "FLAG_DOCUMENT_6", "FLAG_DOCUMENT_8")])
+catdf3 <- catdf3 %>% rename(EmpPhone_Yes=FLAG_EMP_PHONE,
+                            WorkPhone_Yes=FLAG_WORK_PHONE,
+                            Phone_Yes=FLAG_PHONE,
+                            Email_Yes=FLAG_EMAIL,
+                            Doc3_Yes=FLAG_DOCUMENT_3,
+                            Doc6_Yes=FLAG_DOCUMENT_6,
+                            Doc8_Yes=FLAG_DOCUMENT_8)
+head(catdf2)
+head(catdf3)
+```
+
+```{r final dataset}
+df2 <- cbind(condf, catdf3)
+df2 <- df2 %>% relocate(TARGET)
+head(df2)
+```
+
+```{r correlation}
+library(correlation)
+library(corrplot)
+#round(cor(condf), digits=2)
+#corrplot(cor(df2), method="number", type="upper")
+#correlation::correlation(condf, include_factors = TRUE, method="auto")
+cor(df2[-1], df2$TARGET, method="pearson")
+```
+# 3. Logistic Regression
+```{r LogReg - 1st attempt}
+df2$TARGET <- factor(df2$TARGET)
+logreg <- glm(df2$TARGET ~., family=binomial(link='logit'), data=df2)
+summary(logreg)
+#anova(logreg, test = "Chisq")
+```
+
+Statistically significant values are: Children, Income, Credit, Annuity, GoodsPrice, Population, BirthDays, EmployedDays, IdPubDays, FamMembers, RRCC (Region Rating Client w/ City), ExtSource2, LivingApts, CBYear, Gender_M, OwnCar_Y, OwnRealty_Y, Married, Separated, Single, Accountants, Drivers, Laborers, Low-Skill Laborers, Material_Others, WorkPhone_Yes, Doc3_Yes, doc6_Yes, Doc8_Yes
+
+```{anova}
+anova(logreg, test="Chisq")
+```
+
