@@ -1,0 +1,305 @@
+---
+title: "Hme Credit Risk Graphs"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+```{r}
+library(ggplot2)
+library(data.table)
+library(psych)
+library(skimr)
+library(reshape2)
+library(dplyr)
+library(tidyr)
+getwd()
+```
+Bureau data:
+
+```{r}
+bureau = read.csv("../data/bureau.csv")
+#head(bureau)
+summary(bureau)
+nrow(bureau)
+bureau[ which(bureau$CREDIT_ACTIVE == "Bad debt"), ]
+```
+```{r}
+
+bureau_means = bureau %>% group_by(SK_ID_CURR) %>% summarize_if(is.numeric,mean)
+summary(bureau_means)
+nrow(bureau_means)
+
+bureau_sums = bureau %>% group_by(SK_ID_CURR) %>% summarize_if(is.numeric,sum)
+summary(bureau_sums)
+nrow(bureau_sums)
+```
+```{r}
+
+#bureau_pivot = bureau_means %>% pivot_wider(names_from = CREDIT_ACTIVE, values_from = c("DAYS_CREDIT",
+#"CREDIT_DAY_OVERDUE",
+#"DAYS_CREDIT_ENDDATE",
+#"DAYS_ENDDATE_FACT",
+#"AMT_CREDIT_MAX_OVERDUE",
+#"CNT_CREDIT_PROLONG",
+#"AMT_CREDIT_SUM",
+##"AMT_CREDIT_SUM_DEBT",
+#"AMT_CREDIT_SUM_LIMIT",
+#"AMT_CREDIT_SUM_OVERDUE",
+#"DAYS_CREDIT_UPDATE"
+## "AMT_ANNUITY"
+#))
+
+
+bureau_count = bureau %>% 
+  group_by(CREDIT_ACTIVE, SK_ID_CURR) %>%  
+  summarize(counts = n()) %>%  
+  spread(CREDIT_ACTIVE, counts)
+
+bureau_count = bureau_count %>% group_by(SK_ID_CURR) %>% summarize_all(sum,na.rm=TRUE)
+summary(bureau_count)
+nrow(bureau_count)
+
+```
+
+
+```{r}
+bureau_all = merge(merge(bureau_means,bureau_sums,by="SK_ID_CURR"),bureau_count, by="SK_ID_CURR")
+summary(bureau_all)
+bureau_all[is.na(bureau_all)]<-0
+
+```
+
+
+```{r}
+application_train = read.csv("../data/application_train.csv")
+```
+
+
+```{r}
+data(head(application_train))
+summary(application_train)
+nrow(application_train)
+```
+```{r}
+## change all character variables to factors. since they are in fact factors. 
+for (c in colnames(application_train)){
+       if(class(application_train[[c]])=='character'  ) {
+          application_train[[c]] = as.factor(application_train[[c]])
+    }
+}
+```
+
+
+```{r}
+application_train[ , grepl( "FLAG" , names( application_train ) ) ] = lapply(application_train[ , grepl( "FLAG" , names( application_train ) ) ],factor)
+application_train[ , grepl( "FLAG" , names( application_train ) ) ]
+application_train[ ,'TARGET'] = as.factor(application_train[ ,'TARGET'])
+
+```
+
+Above , we changed FLAG columns as categorical variables since they are not really numerical but True/False columns.Also Target column is categorical dependent variable, hence we change it to factor.
+
+```{r}
+nrow(application_train)
+summary(application_train)
+```
+We also will determine and convert  the factor variables which are recognized as numeric by R. 
+
+```{r}
+
+```
+
+Let's look at the data again:
+
+
+```{r}
+application_train = dplyr::left_join(application_train,bureau_all,by="SK_ID_CURR")
+summary(application_train)
+```
+
+Some columns have so many null values and some columns have the same information for almost all data. So these columns have no informational value at all.  We determined about 40 columns like that, we decide to omit them. We will delete ID also
+
+```{r}
+### Drop for the columns
+
+drop <- c("SK_ID_CURR",
+          "FLAG_CONT_MOBILE",
+          "FLAG_DOCUMENT_10",
+          "FLAG_DOCUMENT_11",
+          "FLAG_DOCUMENT_12",
+          "FLAG_DOCUMENT_13",
+          "FLAG_DOCUMENT_14",
+          "FLAG_DOCUMENT_15",
+          "FLAG_DOCUMENT_16",
+          "FLAG_DOCUMENT_17",
+          "FLAG_DOCUMENT_18",
+          "FLAG_DOCUMENT_19",
+          "FLAG_DOCUMENT_2",
+          "FLAG_DOCUMENT_20",
+          "FLAG_DOCUMENT_21",
+          "FLAG_DOCUMENT_4",
+          "FLAG_DOCUMENT_5",
+          "FLAG_DOCUMENT_7",
+          "FLAG_DOCUMENT_9",
+          "FLAG_MOBIL",
+          "BASEMENTAREA_AVG",
+          "BASEMENTAREA_MEDI",
+          "BASEMENTAREA_MODE",
+          "COMMONAREA_AVG",
+          "COMMONAREA_MEDI",
+          "COMMONAREA_MODE",
+          "ELEVATORS_AVG",
+          "ELEVATORS_MEDI",
+          "ELEVATORS_MODE",
+          "EXT_SOURCE_1",
+          "FLOORSMIN_AVG",
+          "FLOORSMIN_MEDI",
+          "FLOORSMIN_MODE",
+          "LANDAREA_AVG",
+          "LANDAREA_MODE",
+          "LIVINGAPARTMENTS_AVG",
+          "LIVINGAPARTMENTS_MEDI",
+          "LIVINGAPARTMENTS_MODE",
+          "NONLIVINGAPARTMENTS_AVG",
+          "NONLIVINGAPARTMENTS_MEDI",
+          "NONLIVINGAPARTMENTS_MODE",
+          "NONLIVINGAREA_AVG",
+          "NONLIVINGAREA_MODE",
+          "OWN_CAR_AGE",
+          "YEARS_BUILD_AVG",
+          "YEARS_BUILD_MEDI",
+          "YEARS_BUILD_MODE",
+          "APARTMENTS_AVG",
+          "YEARS_BEGINEXPLUATATION_AVG", 
+          "ENTRANCES_AVG", 
+          "FLOORSMAX_AVG", 
+          "LIVINGAREA_AVG",
+          "APARTMENTS_MODE", 
+          "YEARS_BEGINEXPLUATATION_MODE",
+          "ENTRANCES_MODE", 
+          "LIVINGAREA_MODE",
+          "APARTMENTS_MEDI",
+          "YEARS_BEGINEXPLUATATION_MEDI", 
+          "ENTRANCES_MEDI",              
+          "FLOORSMAX_MEDI",              
+          "LANDAREA_MEDI",               
+          "LIVINGAREA_MEDI",             
+          "NONLIVINGAREA_MEDI",          
+          "TOTALAREA_MODE",
+          "FLOORSMAX_MODE",
+          "EXT_SOURCE_3",
+          "SK_ID_BUREAU")
+
+df = application_train[,!(names(application_train) %in% drop)]
+
+```
+
+```{r}
+### Fill And Drop Null values
+
+#Factor columns' Null values Fill with the column mean
+  
+
+HasNullFactor <- c("CNT_FAM_MEMBERS",
+                    "DEF_30_CNT_SOCIAL_CIRCLE",
+                    "DEF_60_CNT_SOCIAL_CIRCLE",
+                    "AMT_REQ_CREDIT_BUREAU_HOUR",               
+                    "AMT_REQ_CREDIT_BUREAU_DAY",              
+                    "AMT_REQ_CREDIT_BUREAU_WEEK",             
+                    "AMT_REQ_CREDIT_BUREAU_MON",             
+                    "AMT_REQ_CREDIT_BUREAU_QRT",            
+                    "AMT_REQ_CREDIT_BUREAU_YEAR")
+
+df2_req_credit =     df %>% 
+    group_by(TARGET) %>%
+    summarise(across(HasNullFactor, mean, na.rm = TRUE))
+
+df2_req_credit 
+
+for (columnName in HasNullFactor){
+    
+    df[[columnName]][is.na(df[columnName])] <- round(mean(as.numeric(df[[columnName]]), na.rm = TRUE))
+}
+
+#Numeric columns' Null values Fill with the column mean
+HasNullNumeric <- c("EXT_SOURCE_2",
+                    "AMT_GOODS_PRICE",
+                    "AMT_ANNUITY")
+
+for (columnName in HasNullNumeric){
+  df[columnName][is.na(df[columnName])] <- colMeans(df[columnName], na.rm = TRUE)
+}
+
+#If there is any null other than these, they will be drop
+df <- na.omit(df)
+
+```
+```{r}
+for (c in colnames(application_train)){
+       if(class(application_train[[c]])=='numeric' | class(application_train[[c]])=='integer'  ) {
+           df_uniq = unique(application_train[[c]])
+           print(c,str(length(df_uniq)))
+           if(length(df_uniq) <= 30){
+             application_train[[c]] = as.factor(application_train[[c]])
+           }
+    }
+}
+```
+
+Above should we take a smaller value?? 
+Let's look at eth data again:
+
+```{r}
+
+skimr::skim(df)
+```
+
+Let's start graphs. We use the name df for simplifying the code. 
+
+
+Boxplots for outliers: 
+
+```{r}
+
+for (c in colnames(df)){
+       if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
+        boxplot(df[[c]] ~ TARGET, data = df, col = "red",ylab = c)   
+    }
+}
+```
+
+
+Histograms:
+
+```{r}
+##library(hrbrthemes)
+##to try 
+##ggplot(df,aes(x=DAYS_LAST_PHONE_CHANGE,binwidth=.1, group=TARGET,fill=TARGET))+
+##  geom_histogram(position="dodge")+theme_bw()
+
+
+for (c in colnames(df)){
+  if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
+    df_uniq = unique(df[[c]])
+    ##if(length(df_uniq) > 30 ) {
+      print(c)
+      binw = (max(df[[c]], na.rm=T) - min(df[[c]], na.rm=T)) / sqrt(307512)
+      print(binw)
+        (ggplot(df, aes(x=df[[c]], fill=TARGET)) +
+        geom_histogram( color="#e9ecef", alpha=0.6, position = 'identity') +
+            scale_fill_manual(values=c("#69b3a2", "#404080")) +
+            theme_bw() +
+            xlab(c)+
+            labs(fill=""))  %>% print()
+        
+        
+    ##}
+  }
+}
+```
+
