@@ -7,7 +7,7 @@ output: html_document
 
 # 1. Data Importation
 ```{r import libraries}
-packages <- c("dplyr", "ggplot2", "rpart", "caret", "randomForest", "ipred", "MASS", "survival", "neuralnet", "adabag", "xgboost", "e1071", "class", "rpart.plot", "vip", "pdp", "glmnet", "tidyverse")
+packages <- c("caTools", "dplyr", "ggplot2", "rpart", "caret", "randomForest", "ipred", "MASS", "survival", "neuralnet", "adabag", "xgboost", "e1071", "class", "rpart.plot", "vip", "pdp", "glmnet", "tidyverse", "fastDummies", "correlation", "corrplot")
 lapply(packages, require, character.only=TRUE)
 ```
 
@@ -43,15 +43,19 @@ for (columnName in HasNullNumeric){
   df[columnName][is.na(df[columnName])] <- colMeans(df[columnName], na.rm = TRUE)
 }
 
-df <- df %>% mutate(CODE_GENDER = na_if(CODE_GENDER, "XNA"),
-                    ORGANIZATION_TYPE = na_if(ORGANIZATION_TYPE, "XNA"))
-
 df <- na.omit(df)
+head(df)
 ```
 
 ```{r}
-#skimr::skim(df)
-head(df)
+table(df$TARGET)
+```
+
+```{r}
+df <- df %>% mutate(CODE_GENDER = na_if(CODE_GENDER, "XNA"),
+                    ORGANIZATION_TYPE = na_if(ORGANIZATION_TYPE, "XNA"))
+df <- na.omit(df)
+table(df$TARGET)
 ```
 
 ```{r separating categorical and continuous}
@@ -89,7 +93,7 @@ condf <- condf %>% rename(Children=CNT_CHILDREN,
                           Credit=AMT_CREDIT, 
                           Annuity=AMT_ANNUITY, 
                           GoodsPrice=AMT_GOODS_PRICE, 
-                          Population=REGION_POPULATION_RELATIVE, 
+                          Population=REGION_POPULATION_RELATIVE,
                           BirthDays=DAYS_BIRTH, 
                           EmployedDays=DAYS_EMPLOYED, 
                           RegistrationDays=DAYS_REGISTRATION, 
@@ -141,6 +145,10 @@ df2 <- df2 %>% relocate(TARGET)
 head(df2)
 ```
 
+```{r outliers}
+
+```
+
 ```{r correlation}
 library(correlation)
 library(corrplot)
@@ -150,16 +158,84 @@ library(corrplot)
 cor(df2[-1], df2$TARGET, method="pearson")
 ```
 # 3. Logistic Regression
-```{r LogReg - 1st attempt}
-df2$TARGET <- factor(df2$TARGET)
-logreg <- glm(df2$TARGET ~., family=binomial(link='logit'), data=df2)
+```{r train and test}
+library(caTools)
+library(caret)
+
+df2$TARGET <- factor(df2$TARGET, levels = c(0,1))
+
+options(scipen=999)
+set.seed(100)
+index <- createDataPartition(df2$TARGET, p=.7, list=FALSE)
+
+dfTrain <- df2[index, ]
+dfTest <- df2[-index, ]
+
+logreg <- glm(TARGET ~., family=binomial(link = "logit"), data=dfTrain)
 summary(logreg)
-#anova(logreg, test = "Chisq")
 ```
 
 Statistically significant values are: Children, Income, Credit, Annuity, GoodsPrice, Population, BirthDays, EmployedDays, IdPubDays, FamMembers, RRCC (Region Rating Client w/ City), ExtSource2, LivingApts, CBYear, Gender_M, OwnCar_Y, OwnRealty_Y, Married, Separated, Single, Accountants, Drivers, Laborers, Low-Skill Laborers, Material_Others, WorkPhone_Yes, Doc3_Yes, doc6_Yes, Doc8_Yes
 
-```{anova}
+```{r anova}
 anova(logreg, test="Chisq")
 ```
+
+```{r Classification Table - Train}
+pred_prob <- predict(logreg, dfTest, type="response")
+
+#train
+dfTrain$pred_target <- ifelse(logreg$fitted.values>=.5, "YES", "NO")
+ctabTrain <- table(dfTrain$TARGET, dfTrain$pred_target)
+print(ctabTrain)
+
+#test
+dfTest$pred_target <- ifelse(pred_prob>=.5, "YES", "NO")
+ctabTest <- table(dfTest$TARGET, dfTest$pred_target)
+print(ctabTest)
+```
+
+```{r accuracy}
+#train
+accuracyTrain <- sum(diag(ctabTrain))/sum(ctabTrain)*100
+print(accuracyTrain)
+
+#test
+accuracyTest <- sum(diag(ctabTest))/sum(ctabTest)*100
+print(accuracyTest)
+```
+
+92.89% of all the observations are correctly classified in the training dataset. Overall correct classification of the test dataset is 92.78%. The test dataset maybe a little bit lower than the train dataset. It is still overall about 92% which is still a good indicator of its 
+
+```{r misclassification rate}
+# true positive rate
+tpr <- (ctabTrain[2,2]/sum(ctabTrain[2, ]))*100
+# true negative rate
+tnr <- (ctabTrain[1,1]/sum(ctabTrain[1, ]))*100
+# precision
+precision <- (ctabTrain[2,2]/sum(ctabTrain[,2]))*100
+# f-score
+fScore <- (2*precision*tpr/(precision+tpr))/100
+
+print(tpr)
+print(tnr)
+print(precision)
+print(fScore)
+```
+
+The true positive rate of our model is 0.11% while our true negative rate is 99.99%. Precision of how often predicted true values are actually true is 47.92%. The model has a 0.00% f-score which means that the model does not represent perfect precision and recall. 
+
+```{r ROC curve}
+library(pROC)
+roc <- roc(dfTrain$TARGET, logreg$fitted.values)
+auc(roc)
+```
+
+However the area under the curve which is 0.71 is somewhat a good model. 
+
+```{r concordance}
+library(InformationValue)
+Concordance(logreg$y, logreg$fitted.values)
+```
+
 
