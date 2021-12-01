@@ -17,12 +17,14 @@ library(skimr)
 library(reshape2)
 library(dplyr)
 library(tidyr)
+install.packages("dataPreparation")
+library(dataPreparation)
 getwd()
 ```
 Bureau data:
 
 ```{r}
-bureau = read.csv("../data/bureau.csv")
+bureau = read.csv("./data/bureau.csv")
 #head(bureau)
 summary(bureau)
 nrow(bureau)
@@ -76,7 +78,7 @@ bureau_all[is.na(bureau_all)]<-0
 
 
 ```{r}
-application_train = read.csv("../data/application_train.csv")
+application_train = read.csv("./data/application_train.csv")
 ```
 
 
@@ -240,7 +242,43 @@ for (columnName in HasNullNumeric){
 #If there is any null other than these, they will be drop
 df <- na.omit(df)
 
+
 ```
+```{r}
+#Outliers
+
+NumericColumns <- c(
+"AMT_INCOME_TOTAL",           
+"AMT_CREDIT",                 
+"AMT_ANNUITY",                
+"AMT_GOODS_PRICE",            
+"REGION_POPULATION_RELATIVE", 
+"DAYS_BIRTH",                 
+"DAYS_EMPLOYED",              
+"DAYS_REGISTRATION",          
+"DAYS_ID_PUBLISH",            
+"EXT_SOURCE_2",              
+"OBS_30_CNT_SOCIAL_CIRCLE",  
+"OBS_60_CNT_SOCIAL_CIRCLE",  
+"DAYS_LAST_PHONE_CHANGE")
+
+#Histogram with Normal Curve
+for (columnName in NumericColumns){
+  print(columnName)
+  x<- df[[columnName]]
+  print(summary(x))
+    h<-hist(x, breaks=10, col="red", xlab=columnName, main="Histogram with Normal Curve")
+  xfit<-seq(min(x),max(x),length=40)
+  yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
+  yfit <- yfit*diff(h$mids[1:2])*length(x)
+  lines(xfit, yfit, col="blue", lwd=2)
+}
+
+#Remove Outliers 4STD
+df <- remove_sd_outlier(df, cols = NumericColumns, n_sigmas = 4, verbose = TRUE)
+
+```
+
 ```{r}
 for (c in colnames(df)){
        if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
