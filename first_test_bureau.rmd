@@ -193,7 +193,9 @@ drop <- c("SK_ID_CURR",
           "TOTALAREA_MODE",
           "FLOORSMAX_MODE",
           "EXT_SOURCE_3",
-          "SK_ID_BUREAU")
+          "SK_ID_BUREAU",
+          "SK_ID_BUREAU.x",
+          "SK_ID_BUREAU.y")
 
 df = application_train[,!(names(application_train) %in% drop)]
 
@@ -240,12 +242,12 @@ df <- na.omit(df)
 
 ```
 ```{r}
-for (c in colnames(application_train)){
-       if(class(application_train[[c]])=='numeric' | class(application_train[[c]])=='integer'  ) {
-           df_uniq = unique(application_train[[c]])
+for (c in colnames(df)){
+       if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
+           df_uniq = unique(df[[c]])
            print(c,str(length(df_uniq)))
            if(length(df_uniq) <= 30){
-             application_train[[c]] = as.factor(application_train[[c]])
+             df[[c]] = as.factor(df[[c]])
            }
     }
 }
@@ -255,7 +257,6 @@ Above should we take a smaller value??
 Let's look at eth data again:
 
 ```{r}
-
 skimr::skim(df)
 ```
 
