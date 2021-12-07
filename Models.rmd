@@ -9,21 +9,35 @@ library(caret)
 library(e1071)
 library("klaR")
 library(randomForest)
+
+library(ggplot2)
+library(data.table)
+library(psych)
+library(skimr)
+library(reshape2)
+library(dplyr)
+library(tidyr)
+library(dataPreparation) ## will we use this
+library(lattice)
+library(smbinning)
+library(fastDummies)
 ```
 
 ```{r}
-NumericColumns = c()
-for (c in colnames(select_if(df, is.numeric))){
-    NumericColumns <- c(NumericColumns, c)
-}
+# NumericColumns = c()
+# for (c in colnames(select_if(df, is.numeric))){
+#     NumericColumns <- c(NumericColumns, c)
+# }
+# 
+# catColumns = c()
+# for (c in colnames(select_if(df, is.factor))){
+#     catColumns <- c(catColumns, c)
+# }
+# 
+# catdf <- subset(df, select=catColumns)
+# condf <- subset(df, select=NumericColumns)
 
-catColumns = c()
-for (c in colnames(select_if(df, is.factor()))){
-    catColumns <- c(catColumns, c)
-}
-
-
-
+df <- fastDummies::dummy_cols(df, remove_first_dummy = TRUE,remove_selected_columns = TRUE)
 
 ```
 
