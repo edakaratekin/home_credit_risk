@@ -1,0 +1,556 @@
+---
+title: "HCDR02"
+author: "Gabrielle Saga"
+date: "13/11/2021"
+output: html_document
+---
+
+# 1. Data Importation
+```{r import libraries}
+packages <- c("caTools", "dplyr", "ggplot2", "rpart", "caret", "randomForest", "ipred", "MASS", "survival", "neuralnet", "adabag", "xgboost", "e1071", "class", "rpart.plot", "vip", "pdp", "glmnet", "tidyverse", "fastDummies", "correlation", "corrplot", "data.table", "psych", "skimr", "reshape2", "tidyr", "dataPreparation")
+lapply(packages, require, character.only=TRUE)
+getwd()
+```
+
+```{r import data}
+df_train <- read.csv("application_train.csv")
+df_bureau <- read.csv("bureau.csv")
+
+# head of datasets imported
+head(df_train)
+head(df_bureau)
+
+# bureau
+summary(df_bureau)
+nrow(df_bureau)
+
+#train
+summary(df_train)
+nrow(df_train)
+#any(is.na(df_train))
+#any(duplicated(df_train))
+# drop sk_id_curr
+#df <- df_train[, -c(1)]
+#head(df)
+# missing values
+#table(is.na(df))
+#nrow(df)
+```
+
+# 2. Data Manipulation
+```{r}
+df_bureau[ which(df_bureau$CREDIT_ACTIVE == "Bad debt"), ]
+
+# means
+bureau_means <- df_bureau %>% group_by(SK_ID_CURR) %>% summarize_if(is.numeric, mean)
+summary(bureau_means)
+nrow(bureau_means)
+
+# sums
+bureau_sums <- df_bureau %>% group_by(SK_ID_CURR) %>% summarize_if(is.numeric, sum)
+summary(bureau_sums)
+nrow(bureau_sums)
+
+# count
+bureau_count <- df_bureau %>% group_by(CREDIT_ACTIVE, SK_ID_CURR) %>% summarize(counts=n()) %>% spread(CREDIT_ACTIVE, counts)
+bureau_count <- bureau_count %>% group_by(SK_ID_CURR) %>% summarize_all(sum, na.rm=TRUE)
+summary(bureau_count)
+nrow(bureau_count)
+
+# all
+bureau_all <- merge(merge(bureau_means, bureau_sums, by="SK_ID_CURR"), bureau_count, by="SK_ID_CURR")
+summary(bureau_all)
+bureau_all[is.na(bureau_all)] <- 0
+```
+
+```{r}
+df_train[ , grepl("FLAG", names(df_train))] <- lapply(df_train[, grepl("FLAG", names(df_train))], factor)
+df_train[ , grepl("FLAG", names(df_train))]
+df_train[ , 'TARGET'] <- as.factor(df_train[, 'TARGET'])
+nrow(df_train)
+summary(df_train)
+```
+
+```{r}
+df_train <- dplyr::left_join(df_train, bureau_all, by="SK_ID_CURR")
+head(df_train)
+summary(df_train)
+```
+
+```{r remove unnecessary columns}
+drop <- c("SK_ID_CURR",
+          "FLAG_CONT_MOBILE",
+          "FLAG_DOCUMENT_10",
+          "FLAG_DOCUMENT_11",
+          "FLAG_DOCUMENT_12",
+          "FLAG_DOCUMENT_13",
+          "FLAG_DOCUMENT_14",
+          "FLAG_DOCUMENT_15",
+          "FLAG_DOCUMENT_16",
+          "FLAG_DOCUMENT_17",
+          "FLAG_DOCUMENT_18",
+          "FLAG_DOCUMENT_19",
+          "FLAG_DOCUMENT_2",
+          "FLAG_DOCUMENT_20",
+          "FLAG_DOCUMENT_21",
+          "FLAG_DOCUMENT_4",
+          "FLAG_DOCUMENT_5",
+          "FLAG_DOCUMENT_7",
+          "FLAG_DOCUMENT_9",
+          "FLAG_MOBIL",
+          "BASEMENTAREA_AVG",
+          "BASEMENTAREA_MEDI",
+          "BASEMENTAREA_MODE",
+          "COMMONAREA_AVG",
+          "COMMONAREA_MEDI",
+          "COMMONAREA_MODE",
+          "ELEVATORS_AVG",
+          "ELEVATORS_MEDI",
+          "ELEVATORS_MODE",
+          "EXT_SOURCE_1",
+          "FLOORSMIN_AVG",
+          "FLOORSMIN_MEDI",
+          "FLOORSMIN_MODE",
+          "LANDAREA_AVG",
+          "LANDAREA_MODE",
+          "LIVINGAPARTMENTS_AVG",
+          "LIVINGAPARTMENTS_MEDI",
+          "LIVINGAPARTMENTS_MODE",
+          "NONLIVINGAPARTMENTS_AVG",
+          "NONLIVINGAPARTMENTS_MEDI",
+          "NONLIVINGAPARTMENTS_MODE",
+          "NONLIVINGAREA_AVG",
+          "NONLIVINGAREA_MODE",
+          "OWN_CAR_AGE",
+          "YEARS_BUILD_AVG",
+          "YEARS_BUILD_MEDI",
+          "YEARS_BUILD_MODE",
+          "APARTMENTS_AVG",
+          "YEARS_BEGINEXPLUATATION_AVG", 
+          "ENTRANCES_AVG", 
+          "FLOORSMAX_AVG", 
+          "LIVINGAREA_AVG",
+          "APARTMENTS_MODE", 
+          "YEARS_BEGINEXPLUATATION_MODE",
+          "ENTRANCES_MODE", 
+          "LIVINGAREA_MODE",
+          "APARTMENTS_MEDI",
+          "YEARS_BEGINEXPLUATATION_MEDI", 
+          "ENTRANCES_MEDI",              
+          "FLOORSMAX_MEDI",              
+          "LANDAREA_MEDI",               
+          "LIVINGAREA_MEDI",             
+          "NONLIVINGAREA_MEDI",          
+          "TOTALAREA_MODE",
+          "FLOORSMAX_MODE",
+          "EXT_SOURCE_3",
+          "SK_ID_BUREAU",
+          "SK_ID_BUREAU.x",
+          "SK_ID_BUREAU.y")
+df = df_train[,!(names(df_train) %in% drop)]
+head(df)
+```
+
+```{r fill and drop null values}
+HasNullFactor <- c("CNT_FAM_MEMBERS", 
+                   "DEF_30_CNT_SOCIAL_CIRCLE", 
+                   "DEF_60_CNT_SOCIAL_CIRCLE", 
+                   "AMT_REQ_CREDIT_BUREAU_HOUR", 
+                   "AMT_REQ_CREDIT_BUREAU_DAY", 
+                   "AMT_REQ_CREDIT_BUREAU_MON", 
+                   "AMT_REQ_CREDIT_BUREAU_QRT", 
+                   "AMT_REQ_CREDIT_BUREAU_YEAR")
+
+df_reqCredit <- df %>% group_by(TARGET) %>% summarise(across(HasNullFactor, mean, na.rm=TRUE))
+head(df_reqCredit)
+
+for (columnName in HasNullFactor){
+  df[[columnName]][is.na(df[columnName])] <- round(mean(as.numeric(df[[columnName]]), na.rm = TRUE))
+}
+
+HasNullNumeric <- c("EXT_SOURCE_2", "AMT_GOODS_PRICE", "AMT_ANNUITY")
+
+for (columnName in HasNullNumeric){
+  df[columnName][is.na(df[columnName])] <- colMeans(df[columnName], na.rm = TRUE)
+}
+
+df <- na.omit(df)
+head(df)
+```
+
+```{r}
+table(df$TARGET)
+```
+
+```{r}
+df <- df %>% mutate(CODE_GENDER = na_if(CODE_GENDER, "XNA"),
+                    ORGANIZATION_TYPE = na_if(ORGANIZATION_TYPE, "XNA"))
+df <- na.omit(df)
+table(df$TARGET)
+```
+
+```{r outliers}
+NumericColumns <- c("AMT_INCOME_TOTAL", 
+                    "AMT_CREDIT", 
+                    "AMT_ANNUITY", 
+                    "AMT_GOODS_PRICE",
+                    "REGION_POPULATION_RELATIVE", 
+                    "DAYS_BIRTH", 
+                    "DAYS_EMPLOYED", 
+                    "DAYS_REGISTRATION", 
+                    "DAYS_ID_PUBLISH", 
+                    "EXT_SOURCE_2", 
+                    "OBS_30_CNT_SOCIAL_CIRCLE", 
+                    "OBS_60_CNT_SOCIAL_CIRCLE", 
+                    "DAYS_LAST_PHONE_CHANGE")
+#Histogram with Normal Curve
+for (columnName in NumericColumns){
+  print(columnName)
+  x<- df[[columnName]]
+  print(summary(x))
+    h<-hist(x, breaks=10, col="red", xlab=columnName, main="Histogram with Normal Curve")
+  xfit<-seq(min(x),max(x),length=40)
+  yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
+  yfit <- yfit*diff(h$mids[1:2])*length(x)
+  lines(xfit, yfit, col="blue", lwd=2)
+}
+#Remove Outliers 4STD
+df <- remove_sd_outlier(df, cols = NumericColumns, n_sigmas = 4, verbose = TRUE)
+
+for (c in colnames(df)){
+       if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
+           df_uniq = unique(df[[c]])
+           print(c,str(length(df_uniq)))
+           if(length(df_uniq) <= 30){
+             df[[c]] = as.factor(df[[c]])
+           }
+    }
+}
+```
+
+```{r}
+skimr::skim(df)
+```
+
+```{r outliers boxplots}
+for (c in colnames(df)){
+       if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
+        boxplot(df[[c]] ~ TARGET, data = df, col = "red",ylab = c)   
+    }
+}
+```
+
+```{r outliers histograms}
+for (c in colnames(df)){
+  if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
+    df_uniq = unique(df[[c]])
+      print(c)
+      binw = (max(df[[c]], na.rm=T) - min(df[[c]], na.rm=T)) / sqrt(307512)
+      print(binw)
+        (ggplot(df, aes(x=df[[c]], fill=TARGET)) +
+        geom_histogram( color="#e9ecef", alpha=0.6, position = 'identity') +
+            scale_fill_manual(values=c("#69b3a2", "#404080")) +
+            theme_bw() +
+            xlab(c)+
+            labs(fill=""))  %>% print()
+  }
+}
+```
+
+```{r}
+head(df)
+```
+
+```{r}
+table(df$`Bad debt`)
+```
+
+```{r separating categorical and continuous}
+# categorical
+catdf <- subset(df, select=c(NAME_CONTRACT_TYPE, 
+                             CODE_GENDER, 
+                             FLAG_OWN_CAR, 
+                             FLAG_OWN_REALTY, 
+                             NAME_TYPE_SUITE, 
+                             NAME_INCOME_TYPE, 
+                             NAME_EDUCATION_TYPE, 
+                             NAME_FAMILY_STATUS, 
+                             NAME_HOUSING_TYPE, 
+                             OCCUPATION_TYPE, 
+                             WEEKDAY_APPR_PROCESS_START, 
+                             ORGANIZATION_TYPE, 
+                             FONDKAPREMONT_MODE, 
+                             HOUSETYPE_MODE, 
+                             WALLSMATERIAL_MODE, 
+                             EMERGENCYSTATE_MODE))
+head(catdf)
+
+# continuous
+condf <- subset(df, select=c(TARGET,
+                             FLAG_EMP_PHONE,
+                             FLAG_WORK_PHONE,
+                             FLAG_PHONE,
+                             FLAG_EMAIL,
+                             FLAG_DOCUMENT_3,
+                             FLAG_DOCUMENT_6,
+                             FLAG_DOCUMENT_8,
+                             CNT_CHILDREN, 
+                             AMT_INCOME_TOTAL, 
+                             AMT_CREDIT, 
+                             AMT_ANNUITY, 
+                             AMT_GOODS_PRICE, 
+                             REGION_POPULATION_RELATIVE, 
+                             DAYS_BIRTH, 
+                             DAYS_EMPLOYED, 
+                             DAYS_REGISTRATION, 
+                             DAYS_ID_PUBLISH, 
+                             CNT_FAM_MEMBERS, 
+                             REGION_RATING_CLIENT, 
+                             REGION_RATING_CLIENT_W_CITY, 
+                             HOUR_APPR_PROCESS_START, 
+                             REG_REGION_NOT_LIVE_REGION, 
+                             REG_REGION_NOT_WORK_REGION, 
+                             LIVE_REGION_NOT_WORK_REGION, 
+                             REG_CITY_NOT_LIVE_CITY, 
+                             REG_CITY_NOT_WORK_CITY, 
+                             LIVE_CITY_NOT_WORK_CITY, 
+                             EXT_SOURCE_2, 
+                             OBS_30_CNT_SOCIAL_CIRCLE, 
+                             DEF_30_CNT_SOCIAL_CIRCLE, 
+                             OBS_60_CNT_SOCIAL_CIRCLE, 
+                             DEF_60_CNT_SOCIAL_CIRCLE, 
+                             DAYS_LAST_PHONE_CHANGE, 
+                             AMT_REQ_CREDIT_BUREAU_HOUR, 
+                             AMT_REQ_CREDIT_BUREAU_DAY, 
+                             AMT_REQ_CREDIT_BUREAU_WEEK, 
+                             AMT_REQ_CREDIT_BUREAU_MON, 
+                             AMT_REQ_CREDIT_BUREAU_QRT, 
+                             AMT_REQ_CREDIT_BUREAU_YEAR,
+                             DAYS_CREDIT.x,
+                             CREDIT_DAY_OVERDUE.x,
+                             DAYS_CREDIT_ENDDATE.x,
+                             DAYS_ENDDATE_FACT.x,
+                             AMT_CREDIT_MAX_OVERDUE.x,
+                             CNT_CREDIT_PROLONG.x,
+                             AMT_CREDIT_SUM.x,
+                             AMT_CREDIT_SUM_DEBT.x,
+                             AMT_CREDIT_SUM_LIMIT.x,
+                             AMT_CREDIT_SUM_OVERDUE.x,
+                             DAYS_CREDIT_UPDATE.x,
+                             AMT_ANNUITY.x,
+                             DAYS_CREDIT.y,
+                             CREDIT_DAY_OVERDUE.y,
+                             DAYS_ENDDATE_FACT.y,
+                             AMT_CREDIT_MAX_OVERDUE.y,
+                             CNT_CREDIT_PROLONG.y,
+                             AMT_CREDIT_SUM.y,
+                             AMT_CREDIT_SUM_DEBT.y,
+                             AMT_CREDIT_SUM_LIMIT.y,
+                             AMT_CREDIT_SUM_OVERDUE.y,
+                             DAYS_CREDIT_UPDATE.y,
+                             AMT_ANNUITY.y,
+                             Active,
+                             Closed,
+                             Sold,
+                             `Bad debt`))
+head(condf)
+```
+
+```{r renaming columns}
+#categorical
+catdf <- catdf %>% rename(ContractType=NAME_CONTRACT_TYPE,
+                          Gender=CODE_GENDER,
+                          OwnCar=FLAG_OWN_CAR,
+                          OwnRealty=FLAG_OWN_REALTY,
+                          Suite=NAME_TYPE_SUITE,
+                          IncomeType=NAME_INCOME_TYPE,
+                          Education=NAME_EDUCATION_TYPE,
+                          FamStat=NAME_FAMILY_STATUS,
+                          Housing=NAME_HOUSING_TYPE,
+                          Occ=OCCUPATION_TYPE,
+                          ProcessStart=WEEKDAY_APPR_PROCESS_START,
+                          Org=ORGANIZATION_TYPE,
+                          Account=FONDKAPREMONT_MODE,
+                          HouseMode=HOUSETYPE_MODE,
+                          Material=WALLSMATERIAL_MODE,
+                          Emergency=EMERGENCYSTATE_MODE)
+
+#continuous
+condf <- condf %>% rename(EmpPhone_Yes=FLAG_EMP_PHONE,
+                          WorkPhone_Yes=FLAG_WORK_PHONE,
+                          Phone_Yes=FLAG_PHONE,
+                          Email_Yes=FLAG_EMAIL,
+                          Doc3_Yes=FLAG_DOCUMENT_3,
+                          Doc6_Yes=FLAG_DOCUMENT_6,
+                          Doc8_Yes=FLAG_DOCUMENT_8,
+                          Children=CNT_CHILDREN, 
+                          Income=AMT_INCOME_TOTAL, 
+                          Credit=AMT_CREDIT, 
+                          Annuity=AMT_ANNUITY, 
+                          GoodsPrice=AMT_GOODS_PRICE, 
+                          Population=REGION_POPULATION_RELATIVE,
+                          BirthDays=DAYS_BIRTH, 
+                          EmployedDays=DAYS_EMPLOYED, 
+                          RegistrationDays=DAYS_REGISTRATION, 
+                          IdPubDays=DAYS_ID_PUBLISH, 
+                          FamMembers=CNT_FAM_MEMBERS, 
+                          RRC=REGION_RATING_CLIENT, 
+                          RRCC=REGION_RATING_CLIENT_W_CITY, 
+                          StartHourProcess=HOUR_APPR_PROCESS_START, 
+                          RRNLR=REG_REGION_NOT_LIVE_REGION, 
+                          RRNWR=REG_REGION_NOT_WORK_REGION, 
+                          LRNWR=LIVE_REGION_NOT_WORK_REGION, 
+                          RCNLC=REG_CITY_NOT_LIVE_CITY, 
+                          RCNWC=REG_CITY_NOT_WORK_CITY, 
+                          LCNWC=LIVE_CITY_NOT_WORK_CITY, 
+                          ExtSource2=EXT_SOURCE_2, 
+                          Social30oc=OBS_30_CNT_SOCIAL_CIRCLE, 
+                          Social30dc=DEF_30_CNT_SOCIAL_CIRCLE, 
+                          Social60oc=OBS_60_CNT_SOCIAL_CIRCLE, 
+                          Social60dc=DEF_60_CNT_SOCIAL_CIRCLE, 
+                          SLPC=DAYS_LAST_PHONE_CHANGE, 
+                          CBHour=AMT_REQ_CREDIT_BUREAU_HOUR, 
+                          CBDay=AMT_REQ_CREDIT_BUREAU_DAY, 
+                          CBWeek=AMT_REQ_CREDIT_BUREAU_WEEK, 
+                          CBMonth=AMT_REQ_CREDIT_BUREAU_MON, 
+                          CBQrt=AMT_REQ_CREDIT_BUREAU_QRT, 
+                          CBYear=AMT_REQ_CREDIT_BUREAU_YEAR,
+                          CrDays.x=DAYS_CREDIT.x,
+                          CrOverdue.x=CREDIT_DAY_OVERDUE.x,
+                          CrEnddate.x=DAYS_CREDIT_ENDDATE.x,
+                          FactEnddate.x=DAYS_ENDDATE_FACT.x,
+                          MaxOverdue.x=AMT_CREDIT_MAX_OVERDUE.x,
+                          Prolong.x=CNT_CREDIT_PROLONG.x,
+                          Sum.x=AMT_CREDIT_SUM.x,
+                          SumDebt.x=AMT_CREDIT_SUM_DEBT.x,
+                          SumLimit.x=AMT_CREDIT_SUM_LIMIT.x,
+                          SumOverdue.x=AMT_CREDIT_SUM_OVERDUE.x,
+                          Update.x=DAYS_CREDIT_UPDATE.x,
+                          Annuity.x=AMT_ANNUITY.x,
+                          Days.y=DAYS_CREDIT.y,
+                          Overdue.y=CREDIT_DAY_OVERDUE.y,
+                          FactEnddate.y=DAYS_ENDDATE_FACT.y,
+                          MaxOverdue.y=AMT_CREDIT_MAX_OVERDUE.y,
+                          Prolong.y=CNT_CREDIT_PROLONG.y,
+                          Sum.y=AMT_CREDIT_SUM.y,
+                          SumDebt.y=AMT_CREDIT_SUM_DEBT.y,
+                          SumLimit.y=AMT_CREDIT_SUM_LIMIT.y,
+                          SumOverdue.y=AMT_CREDIT_SUM_OVERDUE.y,
+                          Update.y=DAYS_CREDIT_UPDATE.y,
+                          Annuity.y=AMT_ANNUITY.y,
+                          BadDebt=`Bad debt`)
+```
+
+```{r dummy variables}
+library('fastDummies')
+catdf2 <- fastDummies::dummy_cols(catdf, remove_first_dummy = TRUE)
+catdf2 <- catdf2[, -c(1:16)]
+#catdf3 <- cbind(catdf2, df[c("TARGET", 
+#                             "FLAG_EMP_PHONE", 
+#                             "FLAG_WORK_PHONE", 
+#                             "FLAG_PHONE", 
+#                             "FLAG_EMAIL", 
+#                             "FLAG_DOCUMENT_3", 
+#                             "FLAG_DOCUMENT_6", 
+#                             "FLAG_DOCUMENT_8",
+#                             "Bad debt")])
+#catdf3 <- catdf3 %>% rename(EmpPhone_Yes=FLAG_EMP_PHONE,
+#                            WorkPhone_Yes=FLAG_WORK_PHONE,
+#                            Phone_Yes=FLAG_PHONE,
+#                            Email_Yes=FLAG_EMAIL,
+#                            Doc3_Yes=FLAG_DOCUMENT_3,
+#                            Doc6_Yes=FLAG_DOCUMENT_6,
+#                            Doc8_Yes=FLAG_DOCUMENT_8,
+#                            BadDebt=`Bad debt`)
+head(catdf2)
+#head(catdf3)
+```
+
+```{r final dataset}
+df2 <- cbind(condf, catdf2)
+df2 <- df2 %>% relocate(TARGET)
+head(df2)
+```
+
+# 3. Logistic Regression
+```{r train and test}
+library(caTools)
+library(caret)
+
+df2$TARGET <- factor(df2$TARGET, levels = c(0,1))
+
+options(scipen=999)
+set.seed(100)
+index <- createDataPartition(df2$TARGET, p=.7, list=FALSE)
+
+dfTrain <- df2[index, ]
+dfTest <- df2[-index, ]
+
+logreg <- glm(TARGET ~., family=binomial(link = "logit"), data=dfTrain)
+summary(logreg)
+```
+
+Statistically significant values are: Children, Income, Credit, Annuity, GoodsPrice, Population, BirthDays, EmployedDays, IdPubDays, FamMembers, RRCC (Region Rating Client w/ City), ExtSource2, LivingApts, CBYear, Gender_M, OwnCar_Y, OwnRealty_Y, Married, Separated, Single, Accountants, Drivers, Laborers, Low-Skill Laborers, Material_Others, WorkPhone_Yes, Doc3_Yes, doc6_Yes, Doc8_Yes
+
+```{r anova}
+anova(logreg, test="Chisq")
+```
+
+```{r Classification Table - Train}
+pred_prob <- predict(logreg, dfTest, type="response")
+
+#train
+dfTrain$pred_target <- ifelse(logreg$fitted.values>=.5, "YES", "NO")
+ctabTrain <- table(dfTrain$TARGET, dfTrain$pred_target)
+print(ctabTrain)
+
+#test
+dfTest$pred_target <- ifelse(pred_prob>=.5, "YES", "NO")
+ctabTest <- table(dfTest$TARGET, dfTest$pred_target)
+print(ctabTest)
+```
+
+```{r accuracy}
+#train
+accuracyTrain <- sum(diag(ctabTrain))/sum(ctabTrain)*100
+print(accuracyTrain)
+
+#test
+accuracyTest <- sum(diag(ctabTest))/sum(ctabTest)*100
+print(accuracyTest)
+```
+
+92.89% of all the observations are correctly classified in the training dataset. Overall correct classification of the test dataset is 92.78%. The test dataset maybe a little bit lower than the train dataset. It is still overall about 92% which is still a good indicator of its 
+
+```{r misclassification rate}
+# true positive rate
+tpr <- (ctabTrain[2,2]/sum(ctabTrain[2, ]))*100
+# true negative rate
+tnr <- (ctabTrain[1,1]/sum(ctabTrain[1, ]))*100
+# precision
+precision <- (ctabTrain[2,2]/sum(ctabTrain[,2]))*100
+# f-score
+fScore <- (2*precision*tpr/(precision+tpr))/100
+
+print(tpr)
+print(tnr)
+print(precision)
+print(fScore)
+```
+
+The true positive rate of our model is 0.11% while our true negative rate is 99.99%. Precision of how often predicted true values are actually true is 47.92%. The model has a 0.00% f-score which means that the model does not represent perfect precision and recall. 
+
+```{r ROC curve}
+library(pROC)
+roc <- roc(dfTrain$TARGET, logreg$fitted.values)
+auc(roc)
+```
+
+However the area under the curve which is 0.71 is somewhat a good model. 
+
+```{r concordance}
+library(InformationValue)
+Concordance(logreg$y, logreg$fitted.values)
+```
+
+
