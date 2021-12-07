@@ -1,0 +1,117 @@
+---
+title: "Models"
+output: html_document
+---
+
+```{r}
+library(caTools)
+library(caret)
+library(e1071)
+library("klaR")
+library(randomForest)
+```
+
+```{r}
+NumericColumns = c()
+for (c in colnames(select_if(df, is.numeric))){
+    NumericColumns <- c(NumericColumns, c)
+}
+
+catColumns = c()
+for (c in colnames(select_if(df, is.factor()))){
+    catColumns <- c(catColumns, c)
+}
+
+
+
+
+```
+
+
+
+```{r}
+df$TARGET <- factor(df$TARGET, levels = c(0,1))
+
+options(scipen=999)
+set.seed(100)
+index <- createDataPartition(df$TARGET, p=.8, list=FALSE)
+dfTrain <- df[index, ]
+dfTest <- df[-index, ]
+logreg <- glm(TARGET ~., family=binomial(link = "logit"), data=dfTrain)
+summary(logreg)
+
+```
+
+```{r}
+anova(logreg, test="Chisq")
+```
+
+```{r Classification Table - Train}
+pred_prob <- predict(logreg, dfTest, type="response")
+#train
+dfTrain$pred_target <- ifelse(logreg$fitted.values>=.5, "YES", "NO")
+ctabTrain <- table(dfTrain$TARGET, dfTrain$pred_target)
+print(ctabTrain)
+#test
+dfTest$pred_target <- ifelse(pred_prob>=.5, "YES", "NO")
+ctabTest <- table(dfTest$TARGET, dfTest$pred_target)
+print(ctabTest)
+```
+
+
+```{r}
+set.seed(120)  # Setting Seed
+classifier_cl <- naiveBayes(TARGET ~ ., data = df_train,laplace=1)
+
+```
+```{r}
+# Predicting on test data'
+y_pred <- predict(classifier_cl, newdata = df_test)
+
+# Confusion Matrix
+cm <- table(df_test$TARGET, y_pred)
+cm
+
+# Model Evaluation
+confusionMatrix(cm)
+recall(cm)
+precision(cm)
+F_meas(cm)
+
+
+
+
+```
+
+```{r}
+##cross validation
+
+xTrain = df_train[,-1] # removing y-outcome variable.
+#head(test_cl)
+yTrain = df_train$TARGET # only y.
+
+xTest = df_test[,-1]
+yTest = df_test$TARGET
+
+
+model_cv = train(xTrain,yTrain,'nb',trControl=trainControl(method='cv',number=10))
+
+
+#prop.table(table(predict(model$finalModel,xTest)$class,yTest)) # table() gives frequency table, prop.table() gives freq% table.
+
+
+y_pred_cv <- predict(model_cv$finalModel, xTest)
+
+# Confusion Matrix
+cm_cv <- table(df_train, y_pred_cv$class)
+cm_cv
+
+
+confusionMatrix(cm_cv)
+recall(cm_cv)
+precision(cm_cv)
+F_meas(cm_cv)
+
+```
+
+

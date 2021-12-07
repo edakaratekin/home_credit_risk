@@ -17,14 +17,16 @@ library(skimr)
 library(reshape2)
 library(dplyr)
 library(tidyr)
-install.packages("dataPreparation")
-library(dataPreparation)
+library(dataPreparation) ## will we use this
+library(lattice)
+library(smbinning)
+library(fastDummies)
 getwd()
 ```
 Bureau data:
 
 ```{r}
-bureau = read.csv("./data/bureau.csv")
+bureau = read.csv("../data/bureau.csv")
 #head(bureau)
 summary(bureau)
 nrow(bureau)
@@ -37,24 +39,10 @@ summary(bureau_means)
 nrow(bureau_means)
 
 bureau_sums = bureau %>% group_by(SK_ID_CURR) %>% summarize_if(is.numeric,sum)
-summary(bureau_sums)
 nrow(bureau_sums)
 ```
 ```{r}
 
-#bureau_pivot = bureau_means %>% pivot_wider(names_from = CREDIT_ACTIVE, values_from = c("DAYS_CREDIT",
-#"CREDIT_DAY_OVERDUE",
-#"DAYS_CREDIT_ENDDATE",
-#"DAYS_ENDDATE_FACT",
-#"AMT_CREDIT_MAX_OVERDUE",
-#"CNT_CREDIT_PROLONG",
-#"AMT_CREDIT_SUM",
-##"AMT_CREDIT_SUM_DEBT",
-#"AMT_CREDIT_SUM_LIMIT",
-#"AMT_CREDIT_SUM_OVERDUE",
-#"DAYS_CREDIT_UPDATE"
-## "AMT_ANNUITY"
-#))
 
 
 bureau_count = bureau %>% 
@@ -63,14 +51,13 @@ bureau_count = bureau %>%
   spread(CREDIT_ACTIVE, counts)
 
 bureau_count = bureau_count %>% group_by(SK_ID_CURR) %>% summarize_all(sum,na.rm=TRUE)
-summary(bureau_count)
 nrow(bureau_count)
 
 ```
 
 
 ```{r}
-bureau_all = merge(merge(bureau_means,bureau_sums,by="SK_ID_CURR"),bureau_count, by="SK_ID_CURR")
+bureau_all = merge(merge(bureau_means,bureau_sums,by="SK_ID_CURR",suffix = c("_means", "_sums")),bureau_count, by="SK_ID_CURR",suffix = c("", "_count"))
 summary(bureau_all)
 bureau_all[is.na(bureau_all)]<-0
 
@@ -78,15 +65,24 @@ bureau_all[is.na(bureau_all)]<-0
 
 
 ```{r}
-application_train = read.csv("./data/application_train.csv")
+application_train = read.csv("../data/application_train.csv")
 ```
 
 
 ```{r}
 data(head(application_train))
-summary(application_train)
 nrow(application_train)
 ```
+Let2s look at the data closely 
+
+```{r}
+##application_train$TARGET2 = application_train$TARGET
+application_train[ ,'TARGET'] = as.factor(application_train[ ,'TARGET'])
+
+```
+
+
+
 ```{r}
 ## change all character variables to factors. since they are in fact factors. 
 for (c in colnames(application_train)){
@@ -100,7 +96,7 @@ for (c in colnames(application_train)){
 ```{r}
 application_train[ , grepl( "FLAG" , names( application_train ) ) ] = lapply(application_train[ , grepl( "FLAG" , names( application_train ) ) ],factor)
 application_train[ , grepl( "FLAG" , names( application_train ) ) ]
-application_train[ ,'TARGET'] = as.factor(application_train[ ,'TARGET'])
+
 
 ```
 
@@ -112,16 +108,12 @@ summary(application_train)
 ```
 We also will determine and convert  the factor variables which are recognized as numeric by R. 
 
-```{r}
-
-```
 
 Let's look at the data again:
 
 
 ```{r}
 application_train = dplyr::left_join(application_train,bureau_all,by="SK_ID_CURR")
-summary(application_train)
 ```
 
 Some columns have so many null values and some columns have the same information for almost all data. So these columns have no informational value at all.  We determined about 40 columns like that, we decide to omit them. We will delete ID also
@@ -245,37 +237,7 @@ df <- na.omit(df)
 
 ```
 ```{r}
-#Outliers
 
-NumericColumns <- c(
-"AMT_INCOME_TOTAL",           
-"AMT_CREDIT",                 
-"AMT_ANNUITY",                
-"AMT_GOODS_PRICE",            
-"REGION_POPULATION_RELATIVE", 
-"DAYS_BIRTH",                 
-"DAYS_EMPLOYED",              
-"DAYS_REGISTRATION",          
-"DAYS_ID_PUBLISH",            
-"EXT_SOURCE_2",              
-"OBS_30_CNT_SOCIAL_CIRCLE",  
-"OBS_60_CNT_SOCIAL_CIRCLE",  
-"DAYS_LAST_PHONE_CHANGE")
-
-#Histogram with Normal Curve
-for (columnName in NumericColumns){
-  print(columnName)
-  x<- df[[columnName]]
-  print(summary(x))
-    h<-hist(x, breaks=10, col="red", xlab=columnName, main="Histogram with Normal Curve")
-  xfit<-seq(min(x),max(x),length=40)
-  yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
-  yfit <- yfit*diff(h$mids[1:2])*length(x)
-  lines(xfit, yfit, col="blue", lwd=2)
-}
-
-#Remove Outliers 4STD
-df <- remove_sd_outlier(df, cols = NumericColumns, n_sigmas = 4, verbose = TRUE)
 
 ```
 
@@ -284,61 +246,143 @@ for (c in colnames(df)){
        if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
            df_uniq = unique(df[[c]])
            print(c,str(length(df_uniq)))
-           if(length(df_uniq) <= 30){
+           if(length(df_uniq) <= 15){
              df[[c]] = as.factor(df[[c]])
            }
     }
 }
 ```
-
 Above should we take a smaller value?? 
-Let's look at eth data again:
+Let's look at the graphs: 
 
 ```{r}
-skimr::skim(df)
+# library(lattice)
+# 
+# for (c in colnames(df)){
+#   if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
+#       print(c)
+#       histogram(~ df[[c]] | TARGET, data = df)  %>% print()
+# 
+#   }
+# }
+
 ```
 
-Let's start graphs. We use the name df for simplifying the code. 
+```{r}
+
+# for (c in colnames(df)){
+#   if(class(df[[c]])=='factor' & c != "TARGET"  ) {
+#     name = c
+#     df_temp <- df  %>%
+#   group_by(TARGET, c = df[[c]]) %>%
+#   summarise(counts = n()) 
+#      
+# p <- ggplot(df_temp, aes(x = c, y = counts)) +
+#   geom_bar(
+#     aes(color = TARGET, fill = TARGET),
+#     stat = "identity", position = position_dodge(0.8),
+#     width = 0.7
+#     ) +
+#   xlab(name) +
+#   scale_color_manual(values = c("#0073C2FF", "#EFC000FF"))+
+#   scale_fill_manual(values = c("#0073C2FF", "#EFC000FF"))
+# print(p)
+# 
+#   }
+# }
+
+
+
+```
+
 
 
 Boxplots for outliers: 
 
 ```{r}
 
-for (c in colnames(df)){
-       if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
-        boxplot(df[[c]] ~ TARGET, data = df, col = "red",ylab = c)   
-    }
-}
+# for (c in colnames(df)){
+#        if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
+#         boxplot(df[[c]] ~ TARGET, data = df, col = "red",ylab = c)   
+#     }
+# }
 ```
 
 
-Histograms:
+Remove outliers and re-look at the numeric columns. We have to remove outliers since we  are gonne do binning. 
 
 ```{r}
-##library(hrbrthemes)
-##to try 
-##ggplot(df,aes(x=DAYS_LAST_PHONE_CHANGE,binwidth=.1, group=TARGET,fill=TARGET))+
-##  geom_histogram(position="dodge")+theme_bw()
-
-
-for (c in colnames(df)){
-  if(class(df[[c]])=='numeric' | class(df[[c]])=='integer'  ) {
-    df_uniq = unique(df[[c]])
-    ##if(length(df_uniq) > 30 ) {
-      print(c)
-      binw = (max(df[[c]], na.rm=T) - min(df[[c]], na.rm=T)) / sqrt(307512)
-      print(binw)
-        (ggplot(df, aes(x=df[[c]], fill=TARGET)) +
-        geom_histogram( color="#e9ecef", alpha=0.6, position = 'identity') +
-            scale_fill_manual(values=c("#69b3a2", "#404080")) +
-            theme_bw() +
-            xlab(c)+
-            labs(fill=""))  %>% print()
-        
-        
-    ##}
-  }
+#Finding Numeric Columns and Exclude Factors
+NumericColumns = c()
+for (c in colnames(select_if(df, is.numeric))){
+    NumericColumns <- c(NumericColumns, c)
 }
+
+#Remove Outliers 4STD
+df <- remove_sd_outlier(df, cols = NumericColumns, n_sigmas = 4, verbose = TRUE)
+
+# #Histogram with Normal Curve
+# for (columnName in NumericColumns){
+#   print(columnName)
+#   x<- df[[columnName]]
+#   print(summary(x))
+#   
+#   h<-hist(x, breaks=10, col="red", xlab=columnName, main="Histogram with Normal Curve")
+#   xfit<-seq(min(x),max(x),length=40)
+#   yfit<-dnorm(xfit,mean=mean(x),sd=sd(x))
+#   yfit <- yfit*diff(h$mids[1:2])*length(x)
+#   lines(xfit, yfit, col="blue", lwd=2)
+# }
+
+
+```
+
+
+```{r}
+skimr::skim(df)
+```
+
+Now let's bin the variables with with respect to WOE:
+
+```{r}
+
+## ****************** DOEESN'T WORK DON'T OPEN THE COMMENTS NOW 
+# NumericColumns = c()
+# for (c in colnames(select_if(df, is.numeric))){
+#     NumericColumns <- c(NumericColumns, c)
+# }
+# 
+# 
+# 
+# df3 = df
+# 
+# for (columnName in NumericColumns){
+#   print(columnName)
+# 
+#   x<- df3[[columnName]]
+#   
+#   df3[[columnName]] = smbinning::smbinning(df3, x=columnName,y='TARGET2',p=0.1)
+# 
+# }
+# 
+# 
+# 
+# for (c in colnames(df3)){
+#        if(class(df3[[c]])=='character'  ) {
+#           df3[[c]] = as.factor(df3[[c]])
+#     }
+# }
+# 
+# 
+# summary(df3)
+# df3$TARGET2
+
+```
+
+```{r}
+
+```
+```{r}
+
 ```
 
